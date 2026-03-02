@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install flake8 pytest pytest-cov pip-audit
+
+      - name: Lint
+        run: |
+          . .venv/bin/activate
+          flake8 .
+
+      - name: Unit Tests
+        run: |
+          . .venv/bin/activate
+          pytest -q
+
+      - name: Coverage
+        run: |
+          . .venv/bin/activate
+          pytest --cov=.
+
+      - name: Security
+        run: |
+          . .venv/bin/activate
+          pip-audit
