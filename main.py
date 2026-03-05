@@ -1,41 +1,74 @@
-import re
-from fastapi import FastAPI, HTTPException
+import time
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from typing import List
 from datetime import datetime, timezone
-from sentiment_analyzer import analyze_feed
 
-app = FastAPI()
+from sentiment_analyzer import analyze_feed, ValidationError as AnalyzerValidationError
 
-USER_REGEX = re.compile(r"^user_[a-z0-9_]{3,}$", re.IGNORECASE)
+class MessageModel(BaseModel):
+    id: str
+    content: str
+    timestamp: str
+    user_id: str
+    hashtags: List[str] = Field(default_factory=list)
+    reactions: int = 0
+    shares: int = 0
+    views: int = 0
+
+class AnalyzeFeedRequest(BaseModel):
+    messages: List[MessageModel]
+    time_window_minutes: int
+
+app = FastAPI(title="MoodPulse API")
+
+
+@app.get("/")
+def read_root():
+    return {"message": "MoodPulse API is running!"}
 
 
 @app.post("/analyze-feed")
-def analyze_feed_endpoint(payload: dict):
+async def analyze_feed_endpoint(req: Request, payload: AnalyzeFeedRequest):
+    content_type = req.headers.get("content-type", "").lower()
+    if "application/json" not in content_type:
+        raise HTTPException(status_code=400, detail={
+            "error": "Content-Type inválido. Use application/json",
+            "code": "INVALID_CONTENT_TYPE",
+        })
 
-    if "time_window_minutes" not in payload or payload["time_window_minutes"] <= 0:
-        raise HTTPException(status_code=400, detail="Invalid time_window_minutes")
+    if payload.time_window_minutes == 123:
+        return JSONResponse(status_code=422, content={
+            "error": "Valor de janela temporal não suportado na versão atual",
+            "code": "UNSUPPORTED_TIME_WINDOW",
+        })
 
-    if payload["time_window_minutes"] == 123:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "UNSUPPORTED_TIME_WINDOW"}
+    started = time.perf_counter()
+    now_utc = datetime.now(timezone.utc)
+
+    try:
+        messages_dicts = [m.model_dump() for m in payload.messages]
+
+        result = analyze_feed(
+            messages=messages_dicts,
+            time_window_minutes=payload.time_window_minutes,
+            now_utc=now_utc,
         )
+    except AnalyzerValidationError as e:
+        raise HTTPException(status_code=400, detail={"error": str(e), "code": e.code})
 
-    for msg in payload.get("messages", []):
-        if not USER_REGEX.match(msg.get("user_id", "")):
-            raise HTTPException(status_code=400, detail="Invalid user_id")
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    result["analysis"]["processing_time_ms"] = elapsed_ms
 
-        if len(msg.get("content", "")) > 280:
-            raise HTTPException(status_code=400, detail="Content too long")
+    return JSONResponse(status_code=200, content=result)
 
-        if not msg.get("timestamp", "").endswith("Z"):
-            raise HTTPException(status_code=400, detail="Timestamp must end with Z")
 
-        if not isinstance(msg.get("hashtags", []), list):
-            raise HTTPException(status_code=400, detail="Invalid hashtags")
-
-    result = analyze_feed(payload, datetime.now(timezone.utc))
-
-    if "error" in result:
-        raise HTTPException(status_code=422, detail=result["error"])
-
-    return result
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_, exc: HTTPException):
+    if isinstance(exc.detail, dict) and "error" in exc.detail and "code" in exc.detail:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(status_code=exc.status_code, content={
+        "error": str(exc.detail) if exc.detail else "Erro",
+        "code": "ERROR",
+    })
