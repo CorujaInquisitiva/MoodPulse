@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from sentiment_analyzer import analyze_feed, ValidationError as AnalyzerValidationError
 
+
 class MessageModel(BaseModel):
     id: str
     content: str
@@ -18,9 +19,11 @@ class MessageModel(BaseModel):
     shares: int = 0
     views: int = 0
 
+
 class AnalyzeFeedRequest(BaseModel):
     messages: List[MessageModel]
     time_window_minutes: int
+
 
 app = FastAPI(title="MoodPulse API")
 
@@ -48,16 +51,22 @@ def normalize_unicode_message(msg: dict) -> dict:
 async def analyze_feed_endpoint(req: Request, payload: AnalyzeFeedRequest):
     content_type = req.headers.get("content-type", "").lower()
     if "application/json" not in content_type:
-        raise HTTPException(status_code=400, detail={
-            "error": "Content-Type inválido. Use application/json",
-            "code": "INVALID_CONTENT_TYPE",
-        })
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Content-Type inválido. Use application/json",
+                "code": "INVALID_CONTENT_TYPE",
+            },
+        )
 
     if payload.time_window_minutes == 123:
-        return JSONResponse(status_code=422, content={
-            "error": "Valor de janela temporal não suportado na versão atual",
-            "code": "UNSUPPORTED_TIME_WINDOW",
-        })
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "Valor de janela temporal não suportado na versão atual",
+                "code": "UNSUPPORTED_TIME_WINDOW",
+            },
+        )
 
     started = time.perf_counter()
     now_utc = datetime.now(timezone.utc)
@@ -86,7 +95,10 @@ async def analyze_feed_endpoint(req: Request, payload: AnalyzeFeedRequest):
 async def http_exception_handler(_, exc: HTTPException):
     if isinstance(exc.detail, dict) and "error" in exc.detail and "code" in exc.detail:
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
-    return JSONResponse(status_code=exc.status_code, content={
-        "error": str(exc.detail) if exc.detail else "Erro",
-        "code": "ERROR",
-    })
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": str(exc.detail) if exc.detail else "Erro",
+            "code": "ERROR",
+        },
+    )
