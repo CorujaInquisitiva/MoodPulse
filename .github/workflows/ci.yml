@@ -13,35 +13,33 @@ jobs:
         python-version: [3.11, 3.12]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install
+      - name: Install dependencies
         run: |
           python -m venv .venv
-          . .venv/bin/activate
+          source .venv/bin/activate
+          pip install --upgrade pip
           pip install -r requirements.txt
           pip install flake8 pytest pytest-cov pip-audit
 
-      - name: Lint
+      - name: Lint code
         run: |
-          . .venv/bin/activate
+          source .venv/bin/activate
           flake8 .
 
-      - name: Unit Tests
+      - name: Run tests with coverage
         run: |
-          . .venv/bin/activate
-          pytest -q
-
-      - name: Coverage
-        run: |
-          . .venv/bin/activate
+          source .venv/bin/activate
           pytest --cov=.
 
-      - name: Security
+      - name: Security audit
         run: |
-          . .venv/bin/activate
+          source .venv/bin/activate
           pip-audit
