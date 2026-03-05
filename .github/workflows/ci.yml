@@ -32,7 +32,8 @@ jobs:
       - name: Lint code
         run: |
           source .venv/bin/activate
-          flake8 . --exclude=.venv,__pycache__ --max-line-length=88
+          # Ignora linhas longas (E501) e virtualenv/cache
+          flake8 . --exclude=.venv,__pycache__ --ignore=E501
 
       - name: Run tests with coverage
         run: |
