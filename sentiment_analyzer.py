@@ -21,7 +21,7 @@ INTENSIFIER_SET = {_strip_accents_lower(w) for w in INTENSIFIERS}
 NEGATION_SET = {_strip_accents_lower(w) for w in NEGATIONS}
 
 TOKEN_RE = re.compile(r"(?:#\w+(?:-\w+)*)|\b\w+\b", re.UNICODE)
-USER_ID_REGEX = re.compile(r"^user_[a-z0-9_]{3,}$", re.IGNORECASE)
+USER_ID_REGEX = re.compile(r"^user_[\w]{3,}$", re.UNICODE)
 
 @dataclass
 class ValidationError(Exception):
@@ -94,15 +94,25 @@ def _engagement_rate_user(agg: Dict[str,int]) -> float:
     return base_rate
 
 def _validate_message(m: Dict[str,Any]) -> None:
-    if not isinstance(m.get("content"),str): raise ValidationError("content inválido")
-    if len(m["content"])>280: raise ValidationError("content muito longo")
-    if not isinstance(m.get("user_id"),str) or not USER_ID_REGEX.match(m["user_id"]): raise ValidationError("user_id inválido")
-    if not isinstance(m.get("hashtags",[]),list): raise ValidationError("hashtags inválidas")
-    for k in ["reactions","shares","views"]:
-        v=m.get(k,0)
-        if not isinstance(v,int) or v<0: raise ValidationError(f"{k} inválido")
-    if not m.get("timestamp","").endswith("Z"): raise ValidationError("timestamp inválido")
-    m["_dt"]=datetime.fromisoformat(m["timestamp"][:-1]+"+00:00")
+    if not isinstance(m.get("content"), str):
+        raise ValidationError("content inválido")
+    if len(m["content"]) > 280:
+        raise ValidationError("content muito longo")
+
+    if not isinstance(m.get("user_id"), str) or not USER_ID_REGEX.match(m["user_id"]):
+        raise ValidationError("user_id inválido")
+
+    if not isinstance(m.get("hashtags", []), list):
+        raise ValidationError("hashtags inválidas")
+    for k in ["reactions", "shares", "views"]:
+        v = m.get(k, 0)
+        if not isinstance(v, int) or v < 0:
+            raise ValidationError(f"{k} inválido")
+
+    if not m.get("timestamp", "").endswith("Z"):
+        raise ValidationError("timestamp inválido")
+
+    m["_dt"] = datetime.fromisoformat(m["timestamp"][:-1] + "+00:00")
 
 def _filter_future(messages: List[Dict[str,Any]], now_utc: datetime) -> List[Dict[str,Any]]:
     return [m for m in messages if m["_dt"] <= now_utc+timedelta(seconds=5)]

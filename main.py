@@ -1,4 +1,5 @@
 import time
+import unicodedata
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -29,6 +30,20 @@ def read_root():
     return {"message": "MoodPulse API is running!"}
 
 
+def normalize_unicode_message(msg: dict) -> dict:
+    """Normaliza strings para NFC para evitar problemas de Unicode."""
+    normalized = msg.copy()
+    for key, value in msg.items():
+        if isinstance(value, str):
+            normalized[key] = unicodedata.normalize("NFC", value)
+        elif isinstance(value, list):
+            normalized[key] = [
+                unicodedata.normalize("NFC", v) if isinstance(v, str) else v
+                for v in value
+            ]
+    return normalized
+
+
 @app.post("/analyze-feed")
 async def analyze_feed_endpoint(req: Request, payload: AnalyzeFeedRequest):
     content_type = req.headers.get("content-type", "").lower()
@@ -48,7 +63,10 @@ async def analyze_feed_endpoint(req: Request, payload: AnalyzeFeedRequest):
     now_utc = datetime.now(timezone.utc)
 
     try:
-        messages_dicts = [m.model_dump() for m in payload.messages]
+        # Normaliza Unicode para todos os campos de texto
+        messages_dicts = [
+            normalize_unicode_message(m.model_dump()) for m in payload.messages
+        ]
 
         result = analyze_feed(
             messages=messages_dicts,
