@@ -37,7 +37,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           source .venv/bin/activate
-          pytest --cov=.
+          PYTHONPATH=. pytest --cov=. 
 
       - name: Security audit
         run: |
